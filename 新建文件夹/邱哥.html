@@ -1,0 +1,428 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>邱哥的旅行推荐 - 智能路线规划</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        :root { --primary-color:#4361ee; --secondary-color:#3a0ca3; --accent-color:#f72585; }
+        body { font-family:'Noto Sans SC',sans-serif; scroll-behavior:smooth; background:#f8f9fa; }
+        #bg-canvas { position:fixed; inset:0; width:100%; height:100%; z-index:-1; }
+        .glass-panel { background:rgba(255,255,255,.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.3); box-shadow:0 8px 32px rgba(31,38,135,.15); }
+        .card { transition:all .3s ease; }
+        .card:hover { transform:translateY(-5px); box-shadow:0 15px 30px rgba(0,0,0,.1); }
+        .btn-primary { background:linear-gradient(135deg,var(--primary-color),var(--secondary-color)); transition:all .3s ease; }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 5px 15px rgba(67,97,238,.4); }
+        .loading-spinner { border:4px solid rgba(0,0,0,.1); width:36px; height:36px; border-radius:50%; border-left-color:var(--primary-color); animation:spin 1s linear infinite; }
+        @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+        .timeline-dot { position:absolute; left:-31px; top:6px; width:16px; height:16px; border-radius:50%; background:#fff; border:2px solid var(--primary-color); }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800">
+    <canvas id="bg-canvas"></canvas>
+
+    <nav class="glass-panel sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-lg"><i class="fas fa-plane-departure text-xl"></i></div>
+                <span class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">邱哥的旅行推荐</span>
+            </div>
+            <div class="hidden md:flex space-x-8 font-medium text-gray-600">
+                <a href="#" class="hover:text-blue-600">首页</a>
+                <a href="#featured" class="hover:text-blue-600">精选目的地</a>
+                <a href="#planner" class="hover:text-blue-600">行程规划</a>
+            </div>
+            <button class="md:hidden text-gray-600 hover:text-blue-600"><i class="fas fa-bars text-2xl"></i></button>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 pt-16 pb-24">
+        <section class="text-center mb-20">
+            <h1 class="text-5xl md:text-6xl font-black mb-6 text-gray-900 leading-tight">
+                智能规划您的<br><span class="text-blue-600">完美旅程</span>
+            </h1>
+            <p class="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+                输入目的地（如：北京、上海、成都、三亚、杭州、重庆、广州、西安），一键获得城市亮点、吃住玩推荐与日程安排。
+            </p>
+            <div class="max-w-3xl mx-auto relative z-10">
+                <div class="glass-panel rounded-2xl p-4 flex flex-col md:flex-row gap-4">
+                    <div class="flex-grow relative">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg"></i>
+                        <input id="location-input" class="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-blue-500 outline-none text-lg" placeholder="你想去哪里？">
+                    </div>
+                    <button id="search-btn" class="btn-primary text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2">
+                        <span>开始规划</span><i class="fas fa-magic"></i>
+                    </button>
+                </div>
+                <div class="mt-6 flex flex-wrap justify-center gap-3">
+                    <span class="text-gray-500 text-sm py-1">热门目的地：</span>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">北京</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">上海</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">成都</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">三亚</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">杭州</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">重庆</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">广州</button>
+                    <button class="hot-tag px-3 py-1 bg-white rounded-full text-sm text-gray-600 shadow-sm hover:text-blue-600">西安</button>
+                </div>
+            </div>
+        </section>
+
+        <div id="loading" class="hidden flex-col items-center justify-center py-12">
+            <div class="loading-spinner mb-4"></div>
+            <p class="text-gray-600 animate-pulse">正在为您规划最佳路线...</p>
+        </div>
+
+        <section id="results" class="hidden">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                <h2 class="text-3xl font-bold text-gray-800">
+                    <span id="result-title" class="text-blue-600">北京</span> 专属方案
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span id="score-badge" class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">推荐指数 98%</span>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-2xl p-4 mb-8">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex gap-2">
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-blue-100 text-blue-700 font-medium" data-filter="全部">全部</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-white text-gray-600 font-medium hover:bg-gray-100" data-filter="景点">景点</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-white text-gray-600 font-medium hover:bg-gray-100" data-filter="美食">美食</button>
+                        <button class="filter-btn px-4 py-2 rounded-lg bg-white text-gray-600 font-medium hover:bg-gray-100" data-filter="酒店">酒店</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-600 text-sm">行程天数</label>
+                        <input id="days-slider" type="range" min="1" max="5" value="2" class="w-32">
+                        <span id="days-value" class="text-blue-600 font-bold">2 天</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-600 text-sm">主题</label>
+                        <select id="theme-select" class="px-3 py-2 border rounded-lg text-gray-700 bg-white">
+                            <option value="默认">默认</option>
+                            <option value="家庭">家庭</option>
+                            <option value="情侣">情侣</option>
+                            <option value="轻奢">轻奢</option>
+                            <option value="穷游">穷游</option>
+                        </select>
+                    </div>
+                    <div class="ml-auto flex gap-2">
+                        <button id="copy-btn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium">
+                            <i class="far fa-copy mr-2"></i>复制行程
+                        </button>
+                        <button id="export-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg shadow-blue-200">
+                            <i class="fas fa-download mr-2"></i>导出行程
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-12">
+                <h3 class="text-xl font-bold mb-6 text-gray-700 border-l-4 border-blue-500 pl-3">必打卡推荐</h3>
+                <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+            </div>
+
+            <div class="glass-panel rounded-2xl p-8">
+                <h3 class="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-3">
+                    <i class="fas fa-map-marked-alt text-blue-500"></i><span>每日行程规划</span>
+                </h3>
+                <div id="itinerary-content" class="space-y-6 border-l-2 border-blue-200 pl-6 ml-2"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-white border-t border-gray-200 mt-12 py-8 text-center text-gray-400 text-sm">
+        &copy; 2023 邱哥的旅行推荐. All rights reserved.
+    </footer>
+
+    <script>
+        const initBackground = () => {
+            const canvas = document.getElementById('bg-canvas');
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            const particlesGeometry = new THREE.BufferGeometry();
+            const particlesCount = 800;
+            const posArray = new Float32Array(particlesCount * 3);
+            for (let i = 0; i < particlesCount * 3; i++) posArray[i] = (Math.random() - 0.5) * 20;
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const material = new THREE.PointsMaterial({ size:0.04, color:0x4361ee, transparent:true, opacity:0.6 });
+            const particlesMesh = new THREE.Points(particlesGeometry, material);
+            scene.add(particlesMesh);
+            camera.position.z = 4;
+            let mouseX = 0, mouseY = 0;
+            const animate = () => { requestAnimationFrame(animate); particlesMesh.rotation.y += 0.0005; particlesMesh.rotation.x += mouseY * 0.02; particlesMesh.rotation.y += mouseX * 0.02; renderer.render(scene, camera); };
+            animate();
+            window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+            document.addEventListener('mousemove', e => { mouseX = e.clientX / window.innerWidth - 0.5; mouseY = e.clientY / window.innerHeight - 0.5; });
+        };
+
+        const travelData = {
+            北京: {
+                attractions: [
+                    { type:'景点', name:'故宫博物院', tag:'历史', rating:4.9, img:'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=800&q=80', desc:'穿越明清看皇城。' },
+                    { type:'景点', name:'环球影城', tag:'乐园', rating:4.8, img:'https://images.unsplash.com/photo-1628194488426-17b51b757dc3?w=800&q=80', desc:'奇幻电影世界。' },
+                    { type:'美食', name:'四季民福烤鸭', tag:'美食', rating:4.9, img:'https://images.unsplash.com/photo-1594614271360-0ed9a570ae15?w=800&q=80', desc:'酥脆鸭皮蘸白糖。' },
+                    { type:'酒店', name:'王府半岛酒店', tag:'奢华', rating:4.8, img:'https://images.unsplash.com/photo-1501117716987-c8e8e3f76b86?w=800&q=80', desc:'老城区精品奢享。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'故宫深度游', desc:'午门>太和殿>乾清宫>御花园>神武门。' },
+                    { time:'Day 1 下午', title:'景山公园&北海', desc:'登万春亭俯瞰紫禁城，游白塔。' },
+                    { time:'Day 1 晚上', title:'南锣鼓巷', desc:'胡同CityWalk与小吃集合。' },
+                    { time:'Day 2 全天', title:'环球影城', desc:'哈利波特禁忌之旅与花车巡游。' }
+                ],
+                score: 96
+            },
+            上海: {
+                attractions: [
+                    { type:'景点', name:'外滩', tag:'地标', rating:4.8, img:'https://images.unsplash.com/photo-1548919973-5cef591cdbc9?w=800&q=80', desc:'江风夜景璀璨。' },
+                    { type:'景点', name:'迪士尼乐园', tag:'乐园', rating:4.9, img:'https://images.unsplash.com/photo-1533649557872-699730f0891d?w=800&q=80', desc:'点亮心中奇梦。' },
+                    { type:'美食', name:'武康路咖啡', tag:'CityWalk', rating:4.7, img:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&q=80', desc:'梧桐街区慢体验。' },
+                    { type:'酒店', name:'外滩悦榕庄', tag:'景观', rating:4.8, img:'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=800&q=80', desc:'江景房落地窗。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'武康路CityWalk', desc:'阳台打卡与咖啡小憩。' },
+                    { time:'Day 1 下午', title:'陆家嘴三件套', desc:'登高俯瞰黄浦江两岸。' },
+                    { time:'Day 1 晚上', title:'外滩夜景', desc:'江风与灯光秀。' },
+                    { time:'Day 2 全天', title:'迪士尼', desc:'创极速光轮与烟花秀。' }
+                ],
+                score: 94
+            },
+            成都: {
+                attractions: [
+                    { type:'景点', name:'大熊猫基地', tag:'萌宠', rating:5.0, img:'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=800&q=80', desc:'建议早到看幼崽。' },
+                    { type:'美食', name:'建设路小吃', tag:'美食', rating:4.8, img:'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80', desc:'蛋烘糕、冰粉、烤猪蹄。' },
+                    { type:'景点', name:'宽窄巷子', tag:'人文', rating:4.6, img:'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800&q=80', desc:'盖碗茶与变脸。' },
+                    { type:'酒店', name:'太古里英迪格', tag:'潮流', rating:4.7, img:'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?w=800&q=80', desc:'夜生活便利。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'熊猫基地', desc:'7:30入园直奔产房。' },
+                    { time:'Day 1 下午', title:'人民公园', desc:'茶馆慢生活。' },
+                    { time:'Day 1 晚上', title:'太古里&春熙路', desc:'爬楼熊猫与火锅。' }
+                ],
+                score: 93
+            },
+            三亚: {
+                attractions: [
+                    { type:'景点', name:'蜈支洲岛', tag:'海岛', rating:4.8, img:'https://images.unsplash.com/photo-1540206395-688085723adb?w=800&q=80', desc:'潜水胜地。' },
+                    { type:'景点', name:'亚龙湾', tag:'沙滩', rating:4.7, img:'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?w=800&q=80', desc:'沙质细腻海水清澈。' },
+                    { type:'酒店', name:'瑞吉度假酒店', tag:'度假', rating:4.9, img:'https://images.unsplash.com/photo-1501117716987-c8e8e3f76b86?w=800&q=80', desc:'海景房私家沙滩。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'亚龙湾海滩', desc:'躺平晒太阳与水上摩托。' },
+                    { time:'Day 1 下午', title:'森林公园', desc:'江龙索桥俯瞰全景。' },
+                    { time:'Day 1 晚上', title:'第一市场海鲜', desc:'自购加工新鲜实惠。' }
+                ],
+                score: 95
+            },
+            杭州: {
+                attractions: [
+                    { type:'景点', name:'西湖', tag:'自然', rating:4.9, img:'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80', desc:'十景漫游。' },
+                    { type:'景点', name:'灵隐寺', tag:'人文', rating:4.7, img:'https://images.unsplash.com/photo-1439853949127-fa647821eba0?w=800&q=80', desc:'禅意幽深。' },
+                    { type:'美食', name:'外婆家', tag:'杭帮菜', rating:4.6, img:'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80', desc:'平价排队王。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'西湖环湖', desc:'断桥>孤山>三潭印月。' },
+                    { time:'Day 1 下午', title:'灵隐寺', desc:'飞来峰造像群。' }
+                ],
+                score: 92
+            },
+            重庆: {
+                attractions: [
+                    { type:'景点', name:'洪崖洞', tag:'夜景', rating:4.8, img:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&q=80', desc:'赛博朋克山城。' },
+                    { type:'景点', name:'长江索道', tag:'交通', rating:4.6, img:'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&q=80', desc:'跨江空中视角。' },
+                    { type:'美食', name:'洞子火锅', tag:'美食', rating:4.9, img:'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80', desc:'九宫格够辣够爽。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'解放碑步行街', desc:'地标与美食集中地。' },
+                    { time:'Day 1 下午', title:'长江索道', desc:'跨江打卡与拍照。' },
+                    { time:'Day 1 晚上', title:'洪崖洞', desc:'夜色与灯光。' }
+                ],
+                score: 91
+            },
+            广州: {
+                attractions: [
+                    { type:'景点', name:'广州塔', tag:'地标', rating:4.8, img:'https://images.unsplash.com/photo-1543352634-287b23e7d79f?w=800&q=80', desc:'小蛮腰登塔。' },
+                    { type:'美食', name:'上下九步行街', tag:'美食', rating:4.7, img:'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80', desc:'老广传统味。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'珠江新城', desc:'摩天楼街区。' },
+                    { time:'Day 1 下午', title:'广州塔', desc:'登塔俯瞰城市。' }
+                ],
+                score: 90
+            },
+            西安: {
+                attractions: [
+                    { type:'景点', name:'兵马俑', tag:'历史', rating:4.9, img:'https://images.unsplash.com/photo-1549880338-65ddcdfd017b?w=800&q=80', desc:'地下军阵震撼。' },
+                    { type:'景点', name:'古城墙', tag:'人文', rating:4.7, img:'https://images.unsplash.com/photo-1520975638730-2681b583fa93?w=800&q=80', desc:'骑行一圈。' },
+                    { type:'美食', name:'回民街', tag:'美食', rating:4.6, img:'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80', desc:'肉夹馍与凉皮。' }
+                ],
+                itinerary: [
+                    { time:'Day 1 上午', title:'兵马俑', desc:'一号坑与二号坑。' },
+                    { time:'Day 1 下午', title:'华清池', desc:'唐文化遗址。' }
+                ],
+                score: 93
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initBackground();
+            const searchBtn = document.getElementById('search-btn');
+            const input = document.getElementById('location-input');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const resultTitle = document.getElementById('result-title');
+            const cardsContainer = document.getElementById('cards-container');
+            const itineraryContent = document.getElementById('itinerary-content');
+            const scoreBadge = document.getElementById('score-badge');
+            const daysSlider = document.getElementById('days-slider');
+            const daysValue = document.getElementById('days-value');
+            const themeSelect = document.getElementById('theme-select');
+            const filterBtns = Array.from(document.querySelectorAll('.filter-btn'));
+            const copyBtn = document.getElementById('copy-btn');
+            const exportBtn = document.getElementById('export-btn');
+
+            let currentCity = '北京';
+            let currentFilter = '全部';
+            let currentDays = parseInt(daysSlider.value, 10);
+            let currentTheme = themeSelect.value;
+
+            const normalizeCity = (kw) => {
+                const k = kw.trim().toLowerCase();
+                if (k.includes('北京')) return '北京';
+                if (k.includes('上海')) return '上海';
+                if (k.includes('成都')) return '成都';
+                if (k.includes('三亚')) return '三亚';
+                if (k.includes('杭州')) return '杭州';
+                if (k.includes('重庆')) return '重庆';
+                if (k.includes('广州')) return '广州';
+                if (k.includes('西安')) return '西安';
+                return null;
+            };
+
+            const renderCards = () => {
+                const data = travelData[currentCity];
+                const all = data.attractions;
+                const filtered = currentFilter === '全部' ? all : all.filter(i => i.type === currentFilter);
+                cardsContainer.innerHTML = filtered.map(item => `
+                    <div class="card glass-panel rounded-xl overflow-hidden group">
+                        <div class="h-48 overflow-hidden">
+                            <img src="${item.img}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="${item.name}">
+                        </div>
+                        <div class="p-6">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-bold rounded-md">${item.type}</span>
+                                <div class="flex items-center text-yellow-500 text-sm"><i class="fas fa-star mr-1"></i><span>${item.rating}</span></div>
+                            </div>
+                            <h4 class="text-xl font-bold mb-2 text-gray-800">${item.name}</h4>
+                            <p class="text-gray-500 text-sm">${item.desc}</p>
+                        </div>
+                    </div>
+                `).join('');
+            };
+
+            const renderItinerary = () => {
+                const base = travelData[currentCity].itinerary;
+                const list = [];
+                for (let d = 0; d < currentDays; d++) {
+                    const src = base[d % base.length];
+                    const time = `Day ${d + 1} ${src.time.includes('Day') ? src.time.split(' ').slice(-1)[0] : '行程'}`;
+                    list.push({ time, title: src.title, desc: src.desc });
+                }
+                itineraryContent.innerHTML = list.map(item => `
+                    <div class="relative pb-8">
+                        <div class="timeline-dot"></div>
+                        <div class="flex flex-col sm:flex-row sm:items-center mb-1">
+                            <span class="text-blue-600 font-bold w-32 flex-shrink-0">${item.time}</span>
+                            <h5 class="text-lg font-bold text-gray-800">${item.title}</h5>
+                        </div>
+                        <p class="text-gray-600 text-sm pl-0 sm:pl-32">${item.desc}</p>
+                    </div>
+                `).join('');
+            };
+
+            const updateScore = () => {
+                const base = travelData[currentCity].score || 92;
+                const themeBoost = currentTheme === '情侣' ? 3 : currentTheme === '家庭' ? 2 : currentTheme === '轻奢' ? 1 : 0;
+                const daysBoost = Math.min(currentDays, 5);
+                const score = Math.min(99, base + themeBoost + Math.floor(daysBoost / 2));
+                scoreBadge.textContent = `推荐指数 ${score}%`;
+            };
+
+            const performSearch = () => {
+                const keyword = input.value.trim();
+                const city = normalizeCity(keyword);
+                loading.classList.remove('hidden'); loading.classList.add('flex'); results.classList.add('hidden');
+                setTimeout(() => {
+                    loading.classList.add('hidden'); loading.classList.remove('flex'); results.classList.remove('hidden');
+                    currentCity = city || '北京';
+                    resultTitle.textContent = city ? city : '北京（示例）';
+                    renderCards();
+                    renderItinerary();
+                    updateScore();
+                    results.scrollIntoView({ behavior:'smooth', block:'start' });
+                }, 800);
+            };
+
+            searchBtn.addEventListener('click', performSearch);
+            input.addEventListener('keypress', e => { if (e.key === 'Enter') performSearch(); });
+            document.querySelectorAll('.hot-tag').forEach(tag => {
+                tag.addEventListener('click', e => { input.value = e.target.innerText; performSearch(); });
+            });
+
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    filterBtns.forEach(b => b.className = 'filter-btn px-4 py-2 rounded-lg bg-white text-gray-600 font-medium hover:bg-gray-100');
+                    btn.className = 'filter-btn px-4 py-2 rounded-lg bg-blue-100 text-blue-700 font-medium';
+                    currentFilter = btn.dataset.filter;
+                    renderCards();
+                });
+            });
+
+            daysSlider.addEventListener('input', () => {
+                currentDays = parseInt(daysSlider.value, 10);
+                daysValue.textContent = `${currentDays} 天`;
+                renderItinerary();
+                updateScore();
+            });
+
+            themeSelect.addEventListener('change', () => {
+                currentTheme = themeSelect.value;
+                updateScore();
+            });
+
+            copyBtn.addEventListener('click', async () => {
+                const data = travelData[currentCity];
+                let txt = `【${currentCity}】${currentDays}天行程（主题：${currentTheme}）\n\n推荐：\n`;
+                data.attractions.forEach(i => { txt += `- [${i.type}] ${i.name}（${i.tag}，评分${i.rating}）：${i.desc}\n`; });
+                txt += `\n行程：\n`;
+                const base = itineraryContent.querySelectorAll('.relative');
+                base.forEach(b => {
+                    const time = b.querySelector('.text-blue-600').innerText;
+                    const title = b.querySelector('h5').innerText;
+                    const desc = b.querySelector('p').innerText;
+                    txt += `- ${time}：${title}｜${desc}\n`;
+                });
+                try { await navigator.clipboard.writeText(txt); alert('已复制到剪贴板'); } catch { alert('复制失败，请手动选择文本复制'); }
+            });
+
+            exportBtn.addEventListener('click', () => {
+                const blob = new Blob([document.getElementById('itinerary-content').innerText], { type:'text/plain;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${currentCity}-${currentDays}天行程.txt`;
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            });
+        });
+    </script>
+</body>
+</html>
